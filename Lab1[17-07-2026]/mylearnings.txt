@@ -1,3 +1,14 @@
+
+git status
+git add .
+git commit -m "Updated mylearnings.txt"
+git push origin main
+
+
+
+
+
+
 Absolutely! You've actually completed several important Git/GitHub steps today. Here's a summary of **what you did**, **what each step means**, and the **key terms** you learned.
 
 ---
