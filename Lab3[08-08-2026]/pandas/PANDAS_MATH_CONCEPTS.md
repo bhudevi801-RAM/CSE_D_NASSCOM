@@ -24,6 +24,7 @@ Pandas exists to add two things on top of NumPy:
 | Summation notation `Σ` | `.sum()`, `.mean()`, aggregation functions |
 | Covariance / correlation matrix | `.cov()`, `.corr()` |
 | Cross-tabulation / matrix reshape | `pivot_table`, `pivot` |
+| Partial function / three-valued logic | `NaN`, `isnull()`, `dropna()`, `fillna()` |
 
 Under the hood, a Pandas `DataFrame` **is** a NumPy 2-D array (or several) with an index and column labels bolted on — everything you learned about matrices still applies.
 
@@ -178,7 +179,63 @@ print(pivoted)
 
 ---
 
-## 8. Quick Reference Cheat Sheet
+## 8. Missing Data ↔ Partial Functions & Three-Valued Logic
+
+**Math idea:** think of a DataFrame column as a function from the row index to a value: `f: index → value`. A **total function** is defined for every element of its domain. A **partial function** is defined only on *part* of its domain — for the rest, `f(i)` simply has no value. That's exactly what a missing entry is: the row exists (the index is defined), but the mapping to a value is not.
+
+This connects to the same relational theory behind `merge` in Section 5: SQL and Pandas both effectively use a **third truth value** — `UNKNOWN` — alongside `True`/`False`, for anywhere a value is missing. That's why `NaN == NaN` evaluates to `False`: "is an unknown value equal to another unknown value?" is itself unknown, not true.
+
+```python
+import pandas as pd
+import numpy as np
+
+df = pd.DataFrame({
+    "student": ["Asha", "Ravi", "Meera", "Kabir"],
+    "math":    [85, np.nan, 90, 60],
+    "science": [90, 65, np.nan, 72],
+})
+
+# WORKED EXAMPLE
+print(np.nan == np.nan)   # False -- "unknown = unknown" is still unknown, not true
+print(df.isnull())        # indicator function, same idea as the boolean mask in Section 3
+print(df.isnull().sum())  # count of undefined entries per column (per function)
+```
+
+**Why it matters:** `df["math"] == np.nan` will *never* match anything, because equality is the wrong tool for expressing "this value doesn't exist." `isnull()` is a dedicated predicate for domain membership — the same indicator-function idea as Section 3's `df["math"] > 75`, just asking "is this element in the defined subset?" instead of "does this element satisfy `P(x)`?"
+
+### Restricting the domain: `dropna()`
+
+If `f` is a partial function on index set `I`, `dropna()` produces the **restriction** of the DataFrame to the largest subset of `I` where `f` is totally defined: `I' = {i ∈ I | f(i) is defined}` (across all columns, or a chosen subset via `subset=`).
+
+```python
+# WORKED EXAMPLE
+complete_only = df.dropna()                  # restrict to rows fully defined on every column
+complete_math = df.dropna(subset=["math"])   # restrict to rows where math specifically is defined
+print(complete_only)
+print(complete_math)
+```
+
+### Extending the domain: `fillna()`
+
+`fillna()` does the opposite of `dropna()` — it takes the partial function and **extends** it to a total function by supplying a value everywhere it was previously undefined. *Which* value you extend with matters mathematically: filling with the column mean preserves the sample mean of the originally-defined values, while filling with 0 or a placeholder label doesn't preserve any statistical property — it's just a convention.
+
+```python
+# WORKED EXAMPLE
+df_filled = df.copy()
+df_filled["math"] = df_filled["math"].fillna(df_filled["math"].mean())
+print(df_filled)
+```
+
+**Why it matters:** aggregations (`.sum()`, `.mean()` — Section 6) default to `skipna=True`, meaning they silently compute `Σ` over only the *defined* subset of the domain. This is the same "sum over a subset" idea as `groupby` in Section 4 — except here the subset is "where the function is defined," not "where a category matches."
+
+```python
+print(df["math"].sum())               # 235.0 -- sums only the 3 defined values
+print(df["math"].sum(skipna=False))   # NaN -- undefined "poisons" the sum, like adding an unknown
+```
+
+---
+
+## 9. Quick Reference Cheat Sheet
 
 ```python
 import pandas as pd
@@ -215,6 +272,14 @@ df.corr()    # correlation matrix
 # Reshape (cross-tabulation)
 df.pivot(index=..., columns=..., values=...)
 df.pivot_table(index=..., columns=..., values=..., aggfunc="mean")
+
+# Missing data (partial function <-> total function)
+df.isnull(); df.isnull().sum()          # indicator of undefined entries
+df.dropna()                              # restrict to fully-defined rows
+df.dropna(subset=["col"])                # restrict on specific column(s)
+df["col"].fillna(value)                  # extend to a total function with a constant
+df["col"].fillna(df["col"].mean())       # extend using a statistic
+df["col"].sum(skipna=False)              # let undefined values propagate instead of skipping
 ```
 
 ---
